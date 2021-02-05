@@ -1,0 +1,168 @@
+require "http/client"
+require "json"
+require "uri"
+
+# TODO: Write documentation for `Dgraph`
+module Dgraph
+  VERSION = "0.1.0"
+
+  JSON_CONTENT_TYPE = HTTP::Headers.new.add("Content-Type", "application/json")
+  DQL_CONTENT_TYPE  = HTTP::Headers.new.add("Content-Type", "application/json")
+
+  struct QueryRequest
+    include JSON::Serializable
+    property query : String
+    property variables : Hash(String, String)?
+
+    def initialize(@query : String, @variables = nil)
+    end
+  end
+
+  struct QueryResponseData
+    include JSON::Serializable
+    property all : JSON::Any
+
+    def initialize(@all : JSON::Any)
+    end
+  end
+
+  struct QueryResponse
+    include JSON::Serializable
+    property data : QueryResponseData
+
+    def initialize(@data : QueryResponseData)
+    end
+  end
+
+  struct AlterRequest
+    include JSON::Serializable
+    property drop_attr : String?
+    property drop_op : String?
+    property drop_value : String?
+    property drop_all : Bool?
+
+    def initialize(@drop_all : Bool? = nil, @drop_attr : String? = nil, @drop_value : String? = nil, @drop_op : String? = nil)
+    end
+  end
+
+  struct Error
+    include JSON::Serializable
+    property code : String?
+    property message : String?
+
+    def initialize(@code : String?, @message : String?)
+    end
+  end
+
+  struct MutateRequest
+    include JSON::Serializable
+    property set : String?
+
+    def initialize(@set : String? = nil)
+    end
+  end
+
+  struct MutateResponse
+    include JSON::Serializable
+    property errors : Array(Error)?
+    property set : Array(JSON::Any)?
+
+    def initialize(@errors, @set)
+    end
+  end
+
+  class QueryIterator
+    include Iterator(JSON::PullParser)
+
+    def initialize(io : String)
+      @pull = JSON::PullParser.new(io)
+      @pull.read_begin_object
+      until @pull.kind.end_object?
+        key = @pull.read_object_key
+        case key
+        when "data"
+          @pull.read_begin_object
+          until @pull.kind.end_object?
+            key = @pull.read_object_key
+            @pull.read_begin_array
+            break
+          end
+          break
+        when "errors"
+          errors = Array(Error).new(@pull)
+          errors.try { |e| raise e.to_s }
+        else
+          raise "Invalid member #{key}  at #{@pull.location}"
+        end
+      end
+    end
+
+    def next
+      if @pull.kind.end_array?
+        @pull.read_end_array
+        stop
+      else
+        @pull
+      end
+    end
+  end
+
+  class Client
+    def initialize(url = "http://localhost:8080")
+      uri = URI.parse(url)
+      @client = HTTP::Client.new(uri.host || "localhost", uri.port || 8080)
+    end
+
+    def query(query, variables = nil) : Iterator(JSON::PullParser)
+      response = @client.post("/query", JSON_CONTENT_TYPE, QueryRequest.new(query, variables).to_json)
+      if response.status_code / 100 != 2
+        raise response.body
+      end
+      QueryIterator.new(response.body)
+    end
+
+    def self.handle_error(response)
+      if response.status_code / 100 != 2
+        raise response.body
+      end
+      resp = Error.from_json(response.body)
+      resp.code.try { |c| raise c }
+      nil
+    end
+
+    def alter(statement : String)
+      Client.handle_error(@client.post("/alter", body: statement))
+    end
+
+    def alter(drop_all : Bool? = nil, drop_attr : String? = nil, drop_value : String? = nil, drop_op : String? = nil)
+      req = AlterRequest.new(drop_all, drop_attr, drop_value, drop_op)
+      Client.handle_error(@client.post("/alter", body: req.to_json))
+    end
+
+    def mutate(set)
+      o = IO::Memory.new
+      builder = JSON::Builder.new(o)
+      builder.document do
+        builder.object do
+          if set
+            builder.field("set") do
+              builder.array do
+                set.each do |e|
+                  e.to_json(builder)
+                end
+              end
+            end
+          end
+        end
+      end
+      response = @client.post("/mutate?commitNow=true", JSON_CONTENT_TYPE, body: o.to_s)
+      if response.status_code / 100 != 2
+        raise response.body
+      end
+
+      resp = MutateResponse.from_json(response.body)
+      resp.errors.try { |e| raise e[0].code.not_nil! }
+      resp
+    end
+  end
+end
