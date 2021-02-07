@@ -54,20 +54,38 @@ module Dgraph
     end
   end
 
-  struct MutateRequest
-    include JSON::Serializable
-    property set : String?
+  class Exception < ::Exception
+    def initialize(errors : Array(Error))
+      super(errors.map { |x| "code: #{x.code} message : #{x.message}" }.join(", "))
+    end
 
-    def initialize(@set : String? = nil)
+    def initialize(message : String, errors : Array(Error))
+      super("#{message} #{errors.map { |x| "code: #{x.code} message : #{x.message}" }.join(", ")}")
     end
   end
 
-  struct MutateResponse
+  struct ResponseData
+    include JSON::Serializable
+    property code : String?
+    property message : String?
+    property queries : JSON::Any?
+    property uids : Hash(String, String)?
+    property extensions : JSON::Any?
+
+    def initialize(@code, @message, @queries, @uids, @extensions)
+    end
+  end
+
+  struct Response
     include JSON::Serializable
     property errors : Array(Error)?
-    property set : Array(JSON::Any)?
+    property data : ResponseData?
 
-    def initialize(@errors, @set)
+    def initialize(@errors, @data)
+    end
+
+    def uids : Hash(String, String)
+      data.try { |d| d.uids } || Hash(String, String).new
     end
   end
 
@@ -90,7 +108,7 @@ module Dgraph
           break
         when "errors"
           errors = Array(Error).new(@pull)
-          errors.try { |e| raise e.to_s }
+          errors.try { |e| raise Exception.new(e) }
         else
           raise "Invalid member #{key}  at #{@pull.location}"
         end
@@ -125,8 +143,8 @@ module Dgraph
       if response.status_code / 100 != 2
         raise response.body
       end
-      resp = Error.from_json(response.body)
-      resp.code.try { |c| raise c }
+      resp = Response.from_json(response.body)
+      resp.errors.try { |e| raise Exception.new(e) }
       nil
     end
 
@@ -139,7 +157,7 @@ module Dgraph
       Client.handle_error(@client.post("/alter", body: req.to_json))
     end
 
-    def mutate(set)
+    def mutate(set = nil, delete = nil)
       o = IO::Memory.new
       builder = JSON::Builder.new(o)
       builder.document do
@@ -153,15 +171,23 @@ module Dgraph
               end
             end
           end
+          if delete
+            builder.field("delete") do
+              builder.array do
+                delete.each do |e|
+                  e.to_json(builder)
+                end
+              end
+            end
+          end
         end
       end
       response = @client.post("/mutate?commitNow=true", JSON_CONTENT_TYPE, body: o.to_s)
       if response.status_code / 100 != 2
         raise response.body
       end
-
-      resp = MutateResponse.from_json(response.body)
-      resp.errors.try { |e| raise e[0].code.not_nil! }
+      resp = Response.from_json(response.body)
+      resp.errors.try { |e| raise Exception.new(o.to_s, e) }
       resp
     end
   end
