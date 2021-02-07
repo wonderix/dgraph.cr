@@ -133,14 +133,14 @@ module Dgraph
 
     def query(query, variables = nil) : Iterator(JSON::PullParser)
       response = @client.post("/query", JSON_CONTENT_TYPE, QueryRequest.new(query, variables).to_json)
-      if response.status_code / 100 != 2
+      if response.status_code // 100 != 2
         raise response.body
       end
       QueryIterator.new(response.body)
     end
 
     def self.handle_error(response)
-      if response.status_code / 100 != 2
+      if response.status_code // 100 != 2
         raise response.body
       end
       resp = Response.from_json(response.body)
