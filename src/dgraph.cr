@@ -126,16 +126,20 @@ module Dgraph
   end
 
   class Client
+    Log = ::Log.for(self)
+
     def initialize(url = "http://localhost:8080")
       uri = URI.parse(url)
       @client = HTTP::Client.new(uri.host || "localhost", uri.port || 8080)
     end
 
     def query(query, variables = nil) : Iterator(JSON::PullParser)
+      Log.debug { query }
       response = @client.post("/query", JSON_CONTENT_TYPE, QueryRequest.new(query, variables).to_json)
       if response.status_code // 100 != 2
         raise response.body
       end
+      Log.debug { JSON::Any.from_json(response.body).to_pretty_json }
       QueryIterator.new(response.body)
     end
 
@@ -182,10 +186,12 @@ module Dgraph
           end
         end
       end
+      Log.debug { o.to_s }
       response = @client.post("/mutate?commitNow=true", JSON_CONTENT_TYPE, body: o.to_s)
       if response.status_code / 100 != 2
         raise response.body
       end
+      Log.debug { JSON::Any.from_json(response.body).to_pretty_json }
       resp = Response.from_json(response.body)
       resp.errors.try { |e| raise Exception.new(o.to_s, e) }
       resp

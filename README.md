@@ -26,6 +26,13 @@ TODO: Write usage instructions here
 
 TODO: Write development instructions here
 
+### Logging
+
+```bash
+export CRYSTAL_LOG_LEVEL=DEBUG
+export CRYSTAL_LOG_SOURCE='*'
+```
+
 ## Contributing
 
 1. Fork it (<https://github.com/wonderix/dgraph.cr/fork>)
