@@ -21,6 +21,8 @@ end
 
 describe Dgraph::Base do
   it "creates correct dql_properties" do
-    User.dql_properties.should contain "uid\nfirstname\nlastname\nemail\nposts\n"
+    Post.dql_properties.should eq "uid\nmessage\n"
+    Array(Post).dql_properties.should eq "uid\nmessage\n"
+    User.dql_properties.should eq "uid\nfirstname\nlastname\nemail\nposts\n{\nuid\nmessage\n}\n"
   end
 end
