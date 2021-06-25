@@ -1,6 +1,6 @@
 # dgraph
 
-Dgraph gRpc client for crystal
+Dgraph REST client for crystal
 
 ## Installation
 
@@ -18,9 +18,46 @@ Dgraph gRpc client for crystal
 
 ```crystal
 require "dgraph"
+
+struct Post
+  include Dgraph::Base
+  property message : String
+  def initialize(@message)
+  end
+end
+
+struct User
+  include Dgraph::Base
+  property firstname : String
+  property lastname : String
+  property email : String
+  property posts : [] of Posts
+  def initialize(@firstname, @lastname,  @email, @posts)
+  end
+end
+
+Dgraph.setup
+Dgraph.client.alter("
+  firstname: string @index(trigram,exact) .
+  lastname: string @index(trigram,exact) .
+  posts: [uid] @reverse .
+  type User {
+    firstname
+    lastname
+    posts
+  }
+  type Post {
+
+  }
+")
+
+user = User.new("Max","Mustermann","max.mustermann@web.de")
+
+user.insert
+p user.uid
+
 ```
 
-TODO: Write usage instructions here
 
 ## Development
 
