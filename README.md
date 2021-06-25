@@ -68,6 +68,7 @@ user = User.new("Max", "Mustermann", "max.mustermann@web.de", [Post.new("Hello w
 user.insert
 p user.uid
 p User.all.to_a
+user.delete
 ```
 
 ### Starting dgraph
