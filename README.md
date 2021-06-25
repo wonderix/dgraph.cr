@@ -56,11 +56,11 @@ Dgraph.client.alter("
     }
   ")
 
-user = User.new("Max", "Mustermann", "max.mustermann@web.de", [Post.new("Hello world")])
-
-user.insert
+user = User.new("Max", "Mustermann", "max.mustermann@web.de").insert
+post = Post.new("Hello world", user).insert
 p user.uid
 p User.all.to_a
+p Post.all.to_a
 user.delete
 ```
 
