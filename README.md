@@ -19,9 +19,11 @@ Dgraph REST client for crystal
 ```crystal
 require "dgraph"
 
+
 struct Post
   include Dgraph::Base
   property message : String
+
   def initialize(@message)
   end
 end
@@ -31,33 +33,50 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  property posts : [] of Posts
-  def initialize(@firstname, @lastname,  @email, @posts)
+  property posts : Array(Post)?
+
+  def initialize(@firstname, @lastname, @email, @posts)
+  end
+
+  def self.all
+    Dgraph.client.query("query all($tag: string) {
+          all(func: type(User),orderasc: lastname, orderasc: firstname){
+            #{self.dql_properties}
+          }
+      }").map { |p| self.new(p) }
   end
 end
 
 Dgraph.setup
+Dgraph.client.alter(drop_all: true)
 Dgraph.client.alter("
-  firstname: string @index(trigram,exact) .
-  lastname: string @index(trigram,exact) .
-  posts: [uid] @reverse .
-  type User {
-    firstname
-    lastname
-    posts
-  }
-  type Post {
+    firstname: string @index(trigram,exact) .
+    lastname: string @index(trigram,exact) .
+    posts: [uid] @reverse .
+    type User {
+      firstname
+      lastname
+      posts
+    }
+    type Post {
 
-  }
-")
+    }
+  ")
 
-user = User.new("Max","Mustermann","max.mustermann@web.de")
+user = User.new("Max", "Mustermann", "max.mustermann@web.de", [Post.new("Hello world")])
 
 user.insert
 p user.uid
-
+p User.all.to_a
 ```
 
+### Starting dgraph
+
+```bash
+mkdir -p ~/dgraph
+docker rm -f dpgraph
+docker run -d -p 5080:5080 -p 6080:6080 -p 8080:8080   -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph --name dgraph  dgraph/standalone:v21.03.1
+```
 
 ## Development
 
