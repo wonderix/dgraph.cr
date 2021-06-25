@@ -23,8 +23,8 @@ require "dgraph"
 struct Post
   include Dgraph::Base
   property message : String
-
-  def initialize(@message)
+  property user : User?
+  def initialize(@message, @user)
   end
 end
 
@@ -33,17 +33,11 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
+  @[Dgraph::Edge(reverse: "user")]
   property posts : Array(Post)?
 
-  def initialize(@firstname, @lastname, @email, @posts)
-  end
-
-  def self.all
-    Dgraph.client.query("query all($tag: string) {
-          all(func: type(User),orderasc: lastname, orderasc: firstname){
-            #{self.dql_properties}
-          }
-      }").map { |p| self.new(p) }
+  def initialize(@firstname, @lastname, @email)
+    @posts = nil
   end
 end
 
@@ -52,14 +46,13 @@ Dgraph.client.alter(drop_all: true)
 Dgraph.client.alter("
     firstname: string @index(trigram,exact) .
     lastname: string @index(trigram,exact) .
-    posts: [uid] @reverse .
+    user: uid @reverse .
     type User {
       firstname
       lastname
-      posts
     }
     type Post {
-
+      user
     }
   ")
 
