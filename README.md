@@ -23,7 +23,7 @@ require "dgraph"
 struct Post
   include Dgraph::Base
   property message : String
-  property user : User?
+  edge user : User
   def initialize(@message, @user)
   end
 end
@@ -33,8 +33,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  @[Dgraph::Edge(reverse: "user")]
-  property posts : Array(Post)?
+  edge posts : Array(Post), reverse: "user", facets: [since]
 
   def initialize(@firstname, @lastname, @email)
     @posts = nil

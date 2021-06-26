@@ -1,3 +1,5 @@
+require "json"
+
 class Object
   def self.dql_properties(io, depth, max_depth)
     # raise "Test"
@@ -30,6 +32,9 @@ module Dgraph
   annotation Edge
   end
 
+  annotation Facet
+  end
+
   module Base
     macro included
       include JSON::Serializable
@@ -54,6 +59,31 @@ module Dgraph
         instance = allocate   
         instance.dql_properties(io, depth, max_depth)
       end
+
+  
+    end
+
+    macro edge(decl, **options)
+      {% type = decl.type %}
+
+      {% reverse = (options[:reverse] && !options[:reverse].nil?) ? options[:reverse] : nil %}
+      {% facets = (options[:facets] && !options[:facets].nil?) ? options[:facets] : nil %}
+
+      {% for facet in (facets || [] of Object ) %}
+      @[Dgraph::Facet()]
+      @[JSON::Field("{{decl.var.id}}|" + {{facet}})]
+      @{{decl.var}}_{{facet}} : String? 
+      {% end %}
+
+      @[Dgraph::Edge(reverse: {{reverse}}, facets: {{facets}})]
+      @{{decl.var}} : {{decl.type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
+
+      def {{decl.var.id}}=(@{{decl.var.id}} : {{type.id}}); end
+
+      def {{decl.var.id}} : {{type.id}}
+        raise NilAssertionError.new {{@type.name.stringify}} + "#" + {{decl.var.stringify}} + " cannot be nil" if @{{decl.var}}.nil?
+        @{{decl.var}}.not_nil!
+      end
     end
 
     def insert
@@ -73,13 +103,19 @@ module Dgraph
       {% begin %}
         {% for ivar in @type.instance_vars %}
           {% unless ivar.id.stringify == "_type" %}
-            {% ann = ivar.annotation(::JSON::Field) %}
-            {% unless ann && (ann[:ignore] || ann[:ignore_deserialize]) %}
+            {% json = ivar.annotation(::JSON::Field) %}
+            {% facet = ivar.annotation(Dgraph::Facet) %}
+            {% unless (json && (json[:ignore] || json[:ignore_deserialize])) || facet %}
               io.print("  " * (depth + 1))
-              io.print({{((ann && ann[:key]) || ivar).id.stringify}})
-              {% ann = ivar.annotation(::Dgraph::Edge) %}
-              {% if ann && ann[:reverse] %}
-                io.print(" : ~" + {{ann[:reverse]}} + " ")
+              io.print({{((json && json[:key]) || ivar).id.stringify}})
+              {% edge = ivar.annotation(::Dgraph::Edge) %}
+              {% if edge %}
+                {% if edge[:reverse] %}
+                  io.print(" : ~" + {{edge[:reverse]}} + " ")
+                {% end %}
+                {% if edge[:facets] %}
+                  io.print(" @factets(" + {{edge[:facets].join(", ")}} +") ")
+                {% end %}
               {% end %}
               {{ivar.type.id}}.dql_properties(io, depth+1, max_depth)
               io.puts("")
