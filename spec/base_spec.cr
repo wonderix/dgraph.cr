@@ -13,7 +13,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(Post), reverse: "user", facets: [priority]
+  edge posts : Array(Post), reverse: "user", facets: [priority : Int32]
 
   def initialize(@firstname, @lastname, @email)
   end

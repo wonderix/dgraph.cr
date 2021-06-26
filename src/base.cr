@@ -70,12 +70,13 @@ module Dgraph
       {% facets = (options[:facets] && !options[:facets].nil?) ? options[:facets] : nil %}
 
       {% for facet in (facets || [] of Object ) %}
+      {% raise "#{facet}: facets can only be of type Int32, Bool, String or Time" unless facet.type.id == Int32.id || facet.type.id == Bool.id || facet.type.id == String.id || facet.type.id == Time.id %}
       @[Dgraph::Facet()]
-      @[JSON::Field("{{decl.var.id}}|" + {{facet}})]
-      @{{decl.var}}_{{facet}} : String? 
+      @[JSON::Field("{{decl.var.id}}|" + {{facet.var}})]
+      @{{decl.var}}_{{facet.var}} : {{facet.type}}? 
       {% end %}
 
-      @[Dgraph::Edge(reverse: {{reverse}}, facets: {{facets}})]
+      @[Dgraph::Edge(reverse: {{reverse}}, facets: {{facets ? facets.map{|f| f.var.id} : nil}})]
       @{{decl.var}} : {{decl.type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
 
       def {{decl.var.id}}=(@{{decl.var.id}} : {{type.id}}); end

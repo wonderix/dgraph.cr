@@ -33,7 +33,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(Post), reverse: "user", facets: [since]
+  edge posts : Array(Post), reverse: "user", facets: [since : Time]
 
   def initialize(@firstname, @lastname, @email)
     @posts = nil
