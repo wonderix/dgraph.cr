@@ -33,7 +33,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(Post), reverse: "user", facets: [since : Time]
+  edge posts : Array(Post), name: "user", reverse: true, facets: [since : Time]
 
   def initialize(@firstname, @lastname, @email)
     @posts = nil
@@ -77,10 +77,7 @@ TODO: Write development instructions here
 
 ### Logging
 
-```bash
-export CRYSTAL_LOG_LEVEL=DEBUG
-export CRYSTAL_LOG_SOURCE='*'
-```
+See [Log](https://crystal-lang.org/api/1.0.0/Log.html)
 
 ## Contributing
 

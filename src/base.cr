@@ -60,23 +60,34 @@ module Dgraph
         instance.dql_properties(io, depth, max_depth)
       end
 
+      def self.insert(*args)
+        self.new(*args).insert
+      end
   
     end
 
     macro edge(decl, **options)
       {% type = decl.type %}
 
-      {% reverse = (options[:reverse] && !options[:reverse].nil?) ? options[:reverse] : nil %}
+      {% reverse = !!options[:reverse] %}
       {% facets = (options[:facets] && !options[:facets].nil?) ? options[:facets] : nil %}
+      {% name = (options[:name] && !options[:name].nil?) ? options[:name] : decl.var.id.stringify %}
 
       {% for facet in (facets || [] of Object ) %}
       {% raise "#{facet}: facets can only be of type Int32, Bool, String or Time" unless facet.type.id == Int32.id || facet.type.id == Bool.id || facet.type.id == String.id || facet.type.id == Time.id %}
       @[Dgraph::Facet()]
-      @[JSON::Field("{{decl.var.id}}|" + {{facet.var}})]
-      @{{decl.var}}_{{facet.var}} : {{facet.type}}? 
+      @[JSON::Field("{{decl.var.id}}|" + {{facet.var.id}})]
+      @{{decl.var.id}}_{{facet.var.id}} : {{facet.type.id}}? 
+
+      def {{decl.var.id}}_{{facet.var.id}}=(@{{decl.var.id}}_{{facet.var.id}} : {{facet.type.id}}); end
+
+      def {{decl.var.id}}_{{facet.var.id}} : {{facet.type.id}}
+        @{{decl.var.id}}_{{facet.var.id}}.not_nil!
+      end
       {% end %}
 
-      @[Dgraph::Edge(reverse: {{reverse}}, facets: {{facets ? facets.map{|f| f.var.id} : nil}})]
+
+      @[Dgraph::Edge(name: {{name}}, reverse: {{reverse}}, facets: {{facets ? facets.map{|f| f.var.id} : nil}})]
       @{{decl.var}} : {{decl.type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
 
       def {{decl.var.id}}=(@{{decl.var.id}} : {{type.id}}); end
@@ -85,6 +96,7 @@ module Dgraph
         raise NilAssertionError.new {{@type.name.stringify}} + "#" + {{decl.var.stringify}} + " cannot be nil" if @{{decl.var}}.nil?
         @{{decl.var}}.not_nil!
       end
+
     end
 
     def insert
@@ -108,15 +120,23 @@ module Dgraph
             {% facet = ivar.annotation(Dgraph::Facet) %}
             {% unless (json && (json[:ignore] || json[:ignore_deserialize])) || facet %}
               io.print("  " * (depth + 1))
-              io.print({{((json && json[:key]) || ivar).id.stringify}})
+              {% name = ((json && json[:key]) || ivar).id %}
               {% edge = ivar.annotation(::Dgraph::Edge) %}
               {% if edge %}
                 {% if edge[:reverse] %}
-                  io.print(" : ~" + {{edge[:reverse]}} + " ")
+                  io.print(" {{name}} : ~" + {{edge[:name]}} )
+                {% else %}
+                  {% if name == edge[:name] %}
+                  io.print(" {{name}} : " + {{edge[:name]}})
+                  {% else %}
+                    io.print(" {{name}}")
+                  {% end %}
                 {% end %}
                 {% if edge[:facets] %}
                   io.print(" @factets(" + {{edge[:facets].join(", ")}} +") ")
                 {% end %}
+              {% else %}
+                io.print(" {{name}}")
               {% end %}
               {{ivar.type.id}}.dql_properties(io, depth+1, max_depth)
               io.puts("")

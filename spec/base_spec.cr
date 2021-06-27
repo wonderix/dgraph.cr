@@ -13,7 +13,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(Post), reverse: "user", facets: [priority : Int32]
+  edge posts : Array(Post), name: "user", reverse: true, facets: [priority : Int32]
 
   def initialize(@firstname, @lastname, @email)
   end
@@ -21,8 +21,8 @@ end
 
 describe Dgraph::Base do
   it "creates correct dql_properties" do
-    Post.dql_properties.should eq "  uid\n  message\n  user{\n    uid\n    firstname\n    lastname\n    email\n    posts : ~user  @factets(priority) \n  }\n\n"
+    Post.dql_properties.should eq "   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     posts : ~user @factets(priority) \n  }\n\n"
     Array(Post).dql_properties.should eq Post.dql_properties
-    User.dql_properties.should eq "  uid\n  firstname\n  lastname\n  email\n  posts : ~user  @factets(priority) {\n    uid\n    message\n    user\n  }\n\n"
+    User.dql_properties.should eq "   uid\n   firstname\n   lastname\n   email\n   posts : ~user @factets(priority) {\n     uid\n     message\n     user : user\n  }\n\n"
   end
 end
