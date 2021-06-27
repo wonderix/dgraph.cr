@@ -6,7 +6,7 @@ class Object
   end
 
   def self.dql_properties(max_depth = 1)
-    io = IO::Memory.new  
+    io = IO::Memory.new
     self.dql_properties(io, 0, max_depth)
     io.to_s
   end
@@ -16,14 +16,14 @@ class Array(T)
   def self.dql_properties(io, depth, max_depth)
     {% begin %}
       {{@type.type_vars[0]}}.dql_properties(io, depth, max_depth)
-    {% end   %}
+    {% end %}
   end
 end
 
 struct Union(*T)
   def self.dql_properties(io, depth, max_depth)
     {% begin %}
-      {{@type.union_types.reject{ | x | x == Nil}[0].id}}.dql_properties(io, depth, max_depth)
+      {{@type.union_types.reject { |x| x == Nil }[0].id}}.dql_properties(io, depth, max_depth)
     {% end %}
   end
 end
@@ -73,10 +73,11 @@ module Dgraph
       {% facets = (options[:facets] && !options[:facets].nil?) ? options[:facets] : nil %}
       {% name = (options[:name] && !options[:name].nil?) ? options[:name] : decl.var.id.stringify %}
 
-      {% for facet in (facets || [] of Object ) %}
-      {% raise "#{facet}: facets can only be of type Int32, Bool, String or Time" unless facet.type.id == Int32.id || facet.type.id == Bool.id || facet.type.id == String.id || facet.type.id == Time.id %}
+      {% for facet in (facets || [] of Object) %}
+      {% t = facet.type.resolve %}
+      {% raise "#{facet}: facets can only be of type Int32, Bool, String, Time or Enum" unless t <= Int32 || t <= Bool || t <= String || t <= Time || t < Enum %}
       @[Dgraph::Facet()]
-      @[JSON::Field("{{decl.var.id}}|" + {{facet.var.id}})]
+      @[JSON::Field(key: "{{decl.var.id}}|" + {{facet.var.id}})]
       @{{decl.var.id}}_{{facet.var.id}} : {{facet.type.id}}? 
 
       def {{decl.var.id}}_{{facet.var.id}}=(@{{decl.var.id}}_{{facet.var.id}} : {{facet.type.id}}); end
@@ -87,7 +88,8 @@ module Dgraph
       {% end %}
 
 
-      @[Dgraph::Edge(name: {{name}}, reverse: {{reverse}}, facets: {{facets ? facets.map{|f| f.var.id} : nil}})]
+      @[Dgraph::Edge(name: {{name}}, reverse: {{reverse}}, facets: {{facets ? facets.map { |f| f.var.id } : nil}})]
+      @[JSON::Field(key: {{name}})]
       @{{decl.var}} : {{decl.type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
 
       def {{decl.var.id}}=(@{{decl.var.id}} : {{type.id}}); end
@@ -96,7 +98,6 @@ module Dgraph
         raise NilAssertionError.new {{@type.name.stringify}} + "#" + {{decl.var.stringify}} + " cannot be nil" if @{{decl.var}}.nil?
         @{{decl.var}}.not_nil!
       end
-
     end
 
     def insert
@@ -110,7 +111,7 @@ module Dgraph
       Dgraph.client.mutate(delete: [{"uid" => self.uid}])
     end
 
-    def dql_properties(io,depth, max_depth)
+    def dql_properties(io, depth, max_depth)
       return if depth > max_depth
       io.print("{\n") unless depth == 0
       {% begin %}
@@ -133,7 +134,7 @@ module Dgraph
                   {% end %}
                 {% end %}
                 {% if edge[:facets] %}
-                  io.print(" @factets(" + {{edge[:facets].join(", ")}} +") ")
+                  io.print(" @facets(" + {{edge[:facets].join(", ")}} +") ")
                 {% end %}
               {% else %}
                 io.print(" {{name}}")
@@ -144,7 +145,7 @@ module Dgraph
           {% end %}
         {% end %}
       {% end %}
-      io.puts("  " * depth + "}")  unless depth == 0
+      io.puts("  " * depth + "}") unless depth == 0
     end
   end
 end
