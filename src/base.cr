@@ -18,6 +18,20 @@ class Array(T)
       {{@type.type_vars[0]}}.dql_properties(io, depth, max_depth)
     {% end %}
   end
+
+  def to_json(name : String, builder : JSON::Builder)
+    builder.array do
+      self.each { |e| e.to_json(name, builder) }
+    end
+  end
+
+  def self.new(name : String, pull : JSON::PullParser)
+    result = Array(T).new
+    pull.read_array do
+      result << T.new(name, pull)
+    end
+    result
+  end
 end
 
 struct Union(*T)
@@ -32,9 +46,6 @@ module Dgraph
   annotation EdgeAnnotation
   end
 
-  annotation Facet
-  end
-
   module Base
     macro included
       include JSON::Serializable
@@ -44,7 +55,7 @@ module Dgraph
       @uid : String?
 
       def uid : String
-        @uid.not_nil!
+        @uid ||  "_:nil"
       end
 
       def self.delete(objs)
@@ -80,26 +91,22 @@ module Dgraph
 
     macro edge(decl, **options)
       {% type = decl.type %}
-
+      {% if type.resolve? %}
+      {% edge_type = type.resolve %}
+      {% edge_type = edge_type.type_vars[0] if edge_type <= Array %}
+      {% converter_required = edge_type <= Dgraph::Edge %}
+      {% else %}
+      {% converter_required = false %}
+      {% end %}
       {% reverse = !!options[:reverse] %}
       {% name = (options[:name] && !options[:name].nil?) ? options[:name] : decl.var.id.stringify %}
 
-      {% if decl.var.ends_with?("s") %}
-      @[Dgraph::EdgeAnnotation(name: {{name}}, reverse: {{reverse}})]
-      @[JSON::Field(key: {{name}}, converter: Dgraph::NamedJsonArrayConverter({{type.id}}).new({{name}}))]
-      @{{decl.var}} : Array({{type.id}})? = nil
-
-      def {{decl.var.id}}=(@{{decl.var.id}} : Array({{type.id}}))
-      end
-
-
-      def {{decl.var.id}} : Array({{type.id}})
-        raise NilAssertionError.new "Array({{type.id}}) #" + {{decl.var.stringify}} + " cannot be nil" if @{{decl.var}}.nil?
-        @{{decl.var}}.not_nil!
-      end
-      {% else %}
       @[Dgraph::EdgeAnnotation(name: {{name}}, reverse: {{reverse}} )]
-      @[JSON::Field(key: {{name}}, converter: Dgraph::NamedJsonConverter({{type.id}}).new({{name}}))]
+      {% if converter_required %}
+      @[JSON::Field(key: {{name}}, converter: Dgraph::EdgeJsonConverter({{type.id}}).new({{name}}))]
+      {% else %}
+      @[JSON::Field(key: {{name}})]
+      {% end %}
       @{{decl.var}} : {{type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
 
       def {{decl.var.id}}=(@{{decl.var.id}} : {{type.id}});  end
@@ -108,7 +115,6 @@ module Dgraph
         raise NilAssertionError.new {{@type.name.stringify}} + "#" + {{decl.var.stringify}} + " cannot be nil" if @{{decl.var}}.nil?
         @{{decl.var}}.not_nil!
       end
-      {% end %}
     end
 
     def insert

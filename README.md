@@ -18,13 +18,21 @@ Dgraph REST client for crystal
 
 ```crystal
 require "dgraph"
-
-
 struct Post
   include Dgraph::Base
   property message : String
   edge user : User
+
   def initialize(@message, @user)
+  end
+end
+
+struct PostEdge < Dgraph::Edge(Post)
+  # Facets must be declared using this macro
+  facet priority : Int32
+
+  def initialize(node : Post, @priority)
+    super(node)
   end
 end
 
@@ -33,10 +41,9 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(Post), name: "user", reverse: true, facets: [since : Time]
+  edge posts : Array(PostEdge), name: "user", reverse: true
 
   def initialize(@firstname, @lastname, @email)
-    @posts = nil
   end
 end
 
@@ -58,6 +65,7 @@ Dgraph.client.alter("
 user = User.new("Max", "Mustermann", "max.mustermann@web.de").insert
 post = Post.new("Hello world", user).insert
 p user.uid
+p User.get(user.uid)
 p User.all.to_a
 p Post.all.to_a
 user.delete

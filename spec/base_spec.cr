@@ -9,15 +9,15 @@ struct Post
   end
 end
 
-struct PostEdge
-  include Dgraph::Edge(Post)
+struct PostEdge < Dgraph::Edge(Post)
   enum Priority
     Low
     High
   end
-  property priority : Priority = Priority::High
+  facet priority : Priority = Priority::High
 
-  def initialize(@ref, @priority)
+  def initialize(node : Post, @priority)
+    super(node)
   end
 end
 
@@ -26,7 +26,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : PostEdge, name: "user", reverse: true
+  edge posts : Array(PostEdge), name: "user", reverse: true
 
   def initialize(@firstname, @lastname, @email)
   end
@@ -47,6 +47,6 @@ describe Dgraph::Base do
 
     user = User.from_json(json)
     user.posts[0].priority.should eq PostEdge::Priority::High
-    user.posts[0].ref.message.should eq "Hello world!"
+    user.posts[0].node.message.should eq "Hello world!"
   end
 end
