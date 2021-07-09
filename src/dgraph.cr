@@ -1,6 +1,7 @@
 require "./client"
 require "./base"
 require "./edge"
+require "./facets"
 require "pool/connection"
 
 module Dgraph

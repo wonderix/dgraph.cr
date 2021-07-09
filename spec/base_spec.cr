@@ -9,15 +9,11 @@ struct Post
   end
 end
 
-struct PostEdge < Dgraph::Edge(Post)
-  enum Priority
-    Low
-    High
-  end
-  facet priority : Priority = Priority::High
+struct Posting
+  include Dgraph::Facets
+  property priority : Int32 = 0
 
-  def initialize(node : Post, @priority)
-    super(node)
+  def initialize(@priority)
   end
 end
 
@@ -26,7 +22,7 @@ struct User
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(PostEdge), name: "user", reverse: true
+  edge posts : Array(Dgraph::Edge(Post, Posting)), name: "user", reverse: true
 
   def initialize(@firstname, @lastname, @email)
   end
@@ -34,19 +30,19 @@ end
 
 describe Dgraph::Base do
   it "creates correct dql_properties" do
-    PostEdge.dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
+    Dgraph::Edge(Post, Posting).dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
     Post.dql_properties.should eq "{\n   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
     Array(Post).dql_properties.should eq Post.dql_properties
     User.dql_properties.should eq "{\n   uid\n   firstname\n   lastname\n   email\n   user : ~user @facets(priority){\n     uid\n     message\n     user : user\n  }\n\n}\n"
 
     user = User.new("Max", "Mustermann", "test")
-    user.posts = [PostEdge.new(Post.new("Hello world!"), PostEdge::Priority::High)]
+    user.posts = [Dgraph::Edge.new(Post.new("Hello world!"), Posting.new(1))]
     # Field posts must be user in JSON
     json = user.to_json
-    json.should eq "{\"firstname\":\"Max\",\"lastname\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":\"high\"}],\"dgraph.type\":\"User\"}"
+    json.should eq "{\"firstname\":\"Max\",\"lastname\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":1}],\"dgraph.type\":\"User\"}"
 
     user = User.from_json(json)
-    user.posts[0].priority.should eq PostEdge::Priority::High
-    user.posts[0].node.message.should eq "Hello world!"
+    user.posts[0].facets.priority.should eq 1
+    user.posts[0].value.message.should eq "Hello world!"
   end
 end

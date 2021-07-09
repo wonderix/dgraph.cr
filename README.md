@@ -18,32 +18,36 @@ Dgraph REST client for crystal
 
 ```crystal
 require "dgraph"
-struct Post
+
+struct Employment
+  include Dgraph::Facets
+  property salery : Int32
+  property role : Int32
+
+  def initialize(@salery, @role)
+  end
+end
+
+struct Person
+end
+
+struct Company
   include Dgraph::Base
-  property message : String
-  edge user : User
+  property name : String
+  edge peoples : Array(Dgraph::Edge(Person, Employment)), name: "company", reverse: true
 
-  def initialize(@message, @user)
+  def initialize(@name)
   end
 end
 
-struct PostEdge < Dgraph::Edge(Post)
-  # Facets must be declared using this macro
-  facet priority : Int32
-
-  def initialize(node : Post, @priority)
-    super(node)
-  end
-end
-
-struct User
+struct Person
   include Dgraph::Base
   property firstname : String
   property lastname : String
   property email : String
-  edge posts : Array(PostEdge), name: "user", reverse: true
+  edge company : Dgraph::Edge(Company, Employment), name: "company"
 
-  def initialize(@firstname, @lastname, @email)
+  def initialize(@firstname, @lastname, @email, @company)
   end
 end
 
@@ -52,30 +56,30 @@ Dgraph.client.alter(drop_all: true)
 Dgraph.client.alter("
     firstname: string @index(trigram,exact) .
     lastname: string @index(trigram,exact) .
-    user: uid @reverse .
-    type User {
+    company: uid @reverse .
+    type Person {
       firstname
       lastname
+      company
     }
-    type Post {
-      user
+    type Company {
     }
   ")
 
-user = User.new("Max", "Mustermann", "max.mustermann@web.de").insert
-post = Post.new("Hello world", user).insert
-p user.uid
-p User.get(user.uid)
-p User.all.to_a
-p Post.all.to_a
-user.delete
+company = Company.new("Enterprise").insert
+person = Person.new("Max", "Mustermann", "max.mustermann@web.de", Dgraph::Edge.new(company, Employment.new(10000, 1))).insert
+p person.uid
+p Person.get(person.uid)
+p Person.all.to_a
+p Company.all.to_a
+person.delete
 ```
 
 ### Starting dgraph
 
 ```bash
 mkdir -p ~/dgraph
-docker rm -f dpgraph
+docker rm -f dpgraph || true
 docker run -d -p 5080:5080 -p 6080:6080 -p 8080:8080   -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph --name dgraph  dgraph/standalone:v21.03.1
 ```
 
