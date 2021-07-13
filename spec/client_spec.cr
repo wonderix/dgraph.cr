@@ -56,7 +56,8 @@ describe Dgraph do
     uids = resp.uids
     uids["alice"].should_not be_nil
     uids["bob"].should_not be_nil
-
+    variables = Hash(String, Dgraph::Types).new
+    variables["$a"] = "Alice"
     result = client.query("query all($a: string) {
         all(func: eq(name, $a)) {
             uid
@@ -73,7 +74,7 @@ describe Dgraph do
                 name
             }
         }
-    }", variables = {"$a" => "Alice"}).map { |p| Person.new(p) }.to_a
+    }", variables).map { |p| Person.new(p) }.to_a
     result[0].name.should eq "Alice"
 
     client.mutate(delete: [{"uid" => uids["alice"], "uid" => uids["bob"]}])

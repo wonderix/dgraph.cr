@@ -63,19 +63,15 @@ module Dgraph
       end
 
       def self.all(depth = 1)
-        Dgraph.client.query("{
-              all(func: type(#{self.name})) #{self.dql_properties(depth)}
-          }").map { |p| self.new(p) }
+        Dgraph::Query(self).new(Dgraph.client).depth(depth).each
+      end
+
+      def self.where(**expressions)
+        Dgraph::Query(self).new(Dgraph.client,expressions)
       end
 
       def self.get(uid , depth = 1)
-        begin
-          Dgraph.client.query("query get($uid: int) {
-                all(func: uid($uid))  #{self.dql_properties(depth)}
-            }", variables: {"$uid" => uid.to_s}).map { |p| self.new(p) }.first
-        rescue e : JSON::SerializableError
-          raise "#{self.name} for uid #{uid} not found"
-        end
+        Dgraph::Query(self).new(Dgraph.client,uid: uid).get
       end
 
       def self.dql_properties(io , depth, max_depth)
@@ -84,20 +80,18 @@ module Dgraph
       end
 
       def self.insert(*args)
-        self.new(*args).insert
+        self.new(*args).save
       end
   
     end
 
     macro edge(decl, **options)
       {% type = decl.type %}
-      {% if type.resolve? %}
+      {% raise "Edge type #{type} must be declared before (at least empty)" unless type.resolve? %}
       {% edge_type = type.resolve %}
-      {% edge_type = edge_type.type_vars[0] if edge_type <= Array %}
+      {% is_array = edge_type <= Array %}
+      {% edge_type = edge_type.type_vars[0] if is_array %}
       {% converter_required = edge_type <= Dgraph::Edge %}
-      {% else %}
-      {% converter_required = false %}
-      {% end %}
       {% reverse = !!options[:reverse] %}
       {% name = (options[:name] && !options[:name].nil?) ? options[:name] : decl.var.id.stringify %}
 
@@ -117,7 +111,7 @@ module Dgraph
       end
     end
 
-    def insert
+    def save
       @uid = "_:self" unless @uid
       resp = Dgraph.client.mutate(set: [self])
       @uid = resp.uids["self"] if @uid == "_:self"

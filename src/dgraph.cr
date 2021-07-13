@@ -2,6 +2,7 @@ require "./client"
 require "./base"
 require "./edge"
 require "./facets"
+require "./query"
 require "pool/connection"
 
 module Dgraph

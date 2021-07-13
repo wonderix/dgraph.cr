@@ -1,5 +1,8 @@
 require "./spec_helper"
 
+struct User
+end
+
 struct Post
   include Dgraph::Base
   property message : String
@@ -19,30 +22,57 @@ end
 
 struct User
   include Dgraph::Base
-  property firstname : String
-  property lastname : String
+  property given_name : String
+  property family_name : String
   property email : String
   edge posts : Array(Dgraph::Edge(Post, Posting)), name: "user", reverse: true
 
-  def initialize(@firstname, @lastname, @email)
+  def initialize(@given_name, @family_name, @email)
   end
 end
 
 describe Dgraph::Base do
+  Dgraph.setup
+  client = Dgraph.client
+
+  client.alter(drop_all: true)
+
+  client.alter("
+    user: uid @reverse .
+    given_name : string @index(exact) .
+    family_name : string @index(exact) .
+    type Post {
+      user
+    }
+    type User {
+      family_name
+      given_name
+    }
+  ")
+
   it "creates correct dql_properties" do
-    Dgraph::Edge(Post, Posting).dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
-    Post.dql_properties.should eq "{\n   uid\n   message\n   user : user{\n     uid\n     firstname\n     lastname\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
+    Dgraph::Edge(Post, Posting).dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user : user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
+    Post.dql_properties.should eq "{\n   uid\n   message\n   user : user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
     Array(Post).dql_properties.should eq Post.dql_properties
-    User.dql_properties.should eq "{\n   uid\n   firstname\n   lastname\n   email\n   user : ~user @facets(priority){\n     uid\n     message\n     user : user\n  }\n\n}\n"
+    User.dql_properties.should eq "{\n   uid\n   given_name\n   family_name\n   email\n   user : ~user @facets(priority){\n     uid\n     message\n     user : user\n  }\n\n}\n"
 
     user = User.new("Max", "Mustermann", "test")
     user.posts = [Dgraph::Edge.new(Post.new("Hello world!"), Posting.new(1))]
     # Field posts must be user in JSON
     json = user.to_json
-    json.should eq "{\"firstname\":\"Max\",\"lastname\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":1}],\"dgraph.type\":\"User\"}"
+    json.should eq "{\"given_name\":\"Max\",\"family_name\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":1}],\"dgraph.type\":\"User\"}"
 
     user = User.from_json(json)
     user.posts[0].facets.priority.should eq 1
     user.posts[0].value.message.should eq "Hello world!"
+  end
+
+  it "query is working" do
+    max = User.insert("Max", "Mustermann", "max.musterman@mail.com")
+    erika = User.insert("Erika", "Mustermann", "max.musterman@mail.com")
+    User.get(max.uid).given_name.should eq "Max"
+    User.get(erika.uid).given_name.should eq "Erika"
+    User.where(given_name: "Max").each.size.should eq 1
+    User.where(family_name: "Mustermann").each.size.should eq 2
   end
 end

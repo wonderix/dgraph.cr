@@ -6,13 +6,15 @@ require "uri"
 module Dgraph
   VERSION = "0.1.0"
 
+  alias Types = String | Int32 | Time | Bool | Float64
+
   JSON_CONTENT_TYPE = HTTP::Headers.new.add("Content-Type", "application/json")
   DQL_CONTENT_TYPE  = HTTP::Headers.new.add("Content-Type", "application/json")
 
   struct QueryRequest
     include JSON::Serializable
     property query : String
-    property variables : Hash(String, String)?
+    property variables : Hash(String, Types)?
 
     def initialize(@query : String, @variables = nil)
     end
@@ -90,6 +92,8 @@ module Dgraph
   end
 
   class QueryIterator
+    @stopped = false
+
     include Iterator(JSON::PullParser)
 
     def initialize(io : String)
@@ -118,9 +122,25 @@ module Dgraph
     def next
       if @pull.kind.end_array?
         @pull.read_end_array
+        @stopped = true
+      end
+
+      if @stopped
         stop
       else
         @pull
+      end
+    end
+
+    def get(&block)
+      v = self.next
+      case v
+      when Iterator::Stop
+        nil
+      else
+        result = yield v
+        raise "More than one object found" unless self.next == Iterator::Stop::INSTANCE
+        result
       end
     end
   end
@@ -133,7 +153,7 @@ module Dgraph
       @client = HTTP::Client.new(uri.host || "localhost", uri.port || 8080)
     end
 
-    def query(query, variables = nil) : Iterator(JSON::PullParser)
+    def query(query, variables : Hash(String, Types) = nil) : QueryIterator
       Log.debug { query }
       response = @client.post("/query", JSON_CONTENT_TYPE, QueryRequest.new(query, variables).to_json)
       if response.status_code // 100 != 2

@@ -23,6 +23,15 @@ module Dgraph
     def initialize(@value : T, @facets : F)
     end
 
+    def self.of(o : Edge(T, F) | T)
+      case o
+      when T
+        Edge.new(o, F.new)
+      else
+        o
+      end
+    end
+
     def initialize(name : String, pull : JSON::PullParser)
       name = name + "|"
       h = Hash(String, JSON::Any).new(pull)
