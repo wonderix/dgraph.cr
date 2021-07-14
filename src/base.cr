@@ -71,7 +71,7 @@ module Dgraph
       end
 
       def self.get(uid , depth = 1)
-        Dgraph::Query(self).new(Dgraph.client,uid: uid).get
+        Dgraph::Query(self).new(Dgraph.client,uid: uid).depth(depth).get
       end
 
       def self.dql_properties(io , depth, max_depth)
@@ -79,8 +79,8 @@ module Dgraph
         instance.dql_properties(io, depth, max_depth)
       end
 
-      def self.insert(*args)
-        self.new(*args).save
+      def self.insert(*args,**kwargs)
+        self.new(*args,**kwargs).save
       end
   
     end
