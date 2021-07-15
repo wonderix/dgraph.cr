@@ -95,11 +95,11 @@ module Dgraph
       {% reverse = !!options[:reverse] %}
       {% name = (options[:name] && !options[:name].nil?) ? options[:name] : decl.var.id.stringify %}
 
-      @[Dgraph::EdgeAnnotation(name: {{name}}, reverse: {{reverse}} )]
+      @[Dgraph::EdgeAnnotation(reverse: {{reverse}} )]
       {% if converter_required %}
-      @[JSON::Field(key: {{name}}, converter: Dgraph::EdgeJsonConverter({{type.id}}).new({{name}}))]
+      @[JSON::Field(key: {{name}}, converter: Dgraph::EdgeJsonConverter({{type.id}}).new({{name}}), ignore_serialize: {{reverse}})]
       {% else %}
-      @[JSON::Field(key: {{name}})]
+      @[JSON::Field(key: {{name}}, ignore_serialize: {{reverse}})]
       {% end %}
       @{{decl.var}} : {{type}}? {% unless decl.value.is_a? Nop %} = {{decl.value}} {% end %}
 
@@ -133,16 +133,8 @@ module Dgraph
               io.print("  " * (depth + 1))
               {% name = ((json && json[:key]) || ivar).id %}
               {% edge = ivar.annotation(::Dgraph::EdgeAnnotation) %}
-              {% if edge %}
-                {% if edge[:reverse] %}
-                  io.print(" {{name}} : ~" + {{edge[:name]}} )
-                {% else %}
-                  {% if name == edge[:name] %}
-                  io.print(" {{name}} : " + {{edge[:name]}})
-                  {% else %}
-                    io.print(" {{name}}")
-                  {% end %}
-                {% end %}
+              {% if edge && edge[:reverse] %}
+                io.print(" {{name}} : ~{{name}}" )
               {% else %}
                 io.print(" {{name}}")
               {% end %}

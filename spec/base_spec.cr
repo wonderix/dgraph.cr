@@ -14,9 +14,9 @@ end
 
 struct Posting
   include Dgraph::Facets
-  property priority : Int32 = 0
+  property priority : Int32
 
-  def initialize(@priority)
+  def initialize(@priority = 0)
   end
 end
 
@@ -51,18 +51,22 @@ describe Dgraph::Base do
   ")
 
   it "creates correct dql_properties" do
-    Dgraph::Edge(Post, Posting).dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user : user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
-    Post.dql_properties.should eq "{\n   uid\n   message\n   user : user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
+    Dgraph::Edge(Post, Posting).dql_properties.should eq " @facets(priority){\n   uid\n   message\n   user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
+    Post.dql_properties.should eq "{\n   uid\n   message\n   user{\n     uid\n     given_name\n     family_name\n     email\n     user : ~user @facets(priority)\n  }\n\n}\n"
     Array(Post).dql_properties.should eq Post.dql_properties
-    User.dql_properties.should eq "{\n   uid\n   given_name\n   family_name\n   email\n   user : ~user @facets(priority){\n     uid\n     message\n     user : user\n  }\n\n}\n"
+    User.dql_properties.should eq "{\n   uid\n   given_name\n   family_name\n   email\n   user : ~user @facets(priority){\n     uid\n     message\n     user\n  }\n\n}\n"
 
     user = User.new("Max", "Mustermann", "test")
     user.posts = [Dgraph::Edge.new(Post.new("Hello world!"), Posting.new(1))]
-    # Field posts must be user in JSON
-    json = user.to_json
-    json.should eq "{\"given_name\":\"Max\",\"family_name\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":1}],\"dgraph.type\":\"User\"}"
+    # reverse edges are not serialized
+    user.to_json.should eq "{\"given_name\":\"Max\",\"family_name\":\"Mustermann\",\"email\":\"test\",\"dgraph.type\":\"User\"}"
 
-    user = User.from_json(json)
+    # normal edges are serialized
+    post = Post.new("Hello")
+    post.user = user
+    post.to_json.should eq "{\"message\":\"Hello\",\"user\":{\"given_name\":\"Max\",\"family_name\":\"Mustermann\",\"email\":\"test\",\"dgraph.type\":\"User\"},\"dgraph.type\":\"Post\"}"
+
+    user = User.from_json("{\"given_name\":\"Max\",\"family_name\":\"Mustermann\",\"email\":\"test\",\"user\":[{\"message\":\"Hello world!\",\"dgraph.type\":\"Post\",\"user|priority\":1}],\"dgraph.type\":\"User\"}")
     user.posts[0].facets.priority.should eq 1
     user.posts[0].value.message.should eq "Hello world!"
   end
